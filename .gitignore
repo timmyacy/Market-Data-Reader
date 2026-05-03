@@ -1,0 +1,4 @@
+.zed/
+build/*
+cmake-build-*/
+.cache/
