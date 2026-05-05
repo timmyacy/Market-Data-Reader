@@ -31,7 +31,7 @@ vector<string> scanDirectory() {
   }
   return files;
 }
-void sortDate(vector<CSVModel> &model) {
+void printDate(vector<CSVModel> &model) {
   cout << " The dates are from " << model.back().date << " to "
        << model.front().date;
 }
@@ -64,8 +64,15 @@ int selectCSV(const vector<string> &files) {
   return selected;
 }
 
+void writeCSV(vector<pair<string, double>> rolling_vol, const string &symbol) {
+  ofstream out(symbol + " rolling_vol.csv");
+  out << "Date, Rolling Volatility\n";
+  for (auto &[date, vol] : rolling_vol)
+    out << date << "," << vol << "\n";
+}
+
 void calculate_stats(const vector<CSVModel> &data, int rowsProcessed,
-                     int rowsSkipped) {
+                     const string &symbol) {
   Statistics stats{};
   vector<double> daily_returns;
 
@@ -103,7 +110,7 @@ void calculate_stats(const vector<CSVModel> &data, int rowsProcessed,
       double dd = (peak - close) / peak;
       if (dd > stats.max_drawdown) {
         stats.max_drawdown = dd;
-        trough_date = data[i].date; // date of the worst point so far
+        trough_date = data[i].date;
       }
     }
   }
@@ -112,8 +119,29 @@ void calculate_stats(const vector<CSVModel> &data, int rowsProcessed,
        << "\nAnnualised vol    : " << stats.annualised_vol * 100 << "%";
   cout << "\nMax drawdown      : " << stats.max_drawdown * 100 << "%"
        << "  (trough: " << trough_date << ")\n";
+
+  vector<pair<string, double>> rolling_vol;
+
+  for (int i = 19; i < (int)daily_returns.size(); i++) {
+    double w_mean{};
+    for (int j = i - 19; j <= i; j++) {
+      w_mean += daily_returns[j];
+    }
+    w_mean /= 20.0;
+
+    double w_var{};
+    for (int j = i - 19; j <= i; j++) {
+      w_var += pow(daily_returns[j] - w_mean, 2);
+    }
+    w_var /= 19.0;
+
+    double vol = sqrt(w_var) * sqrt(252);
+    rolling_vol.push_back({data[i + 1].date, vol});
+  }
+  writeCSV(rolling_vol, symbol);
 }
-void parseFile(const string fileName, vector<CSVModel> &data) {
+
+void parseFile(const string fileName, vector<CSVModel> &data, string &symbol) {
   ifstream file(fileName);
   int rowsProcessed{0};
   int rowsSkipped{0};
@@ -149,19 +177,34 @@ void parseFile(const string fileName, vector<CSVModel> &data) {
       data.push_back(model);
     }
   }
-  sortDate(data);
-  calculate_stats(data, rowsProcessed, rowsSkipped);
+  printDate(data);
+  calculate_stats(data, rowsProcessed, symbol);
 }
 
-int main() {
-  vector<string> files = scanDirectory();
-  if (files.empty()) {
-    cout << "No CSV files found in current directory\n";
-    return 1;
-  }
-  int choice = selectCSV(files);
-  string filename = files[choice];
+int main(int argc, char **argv) {
+
+  int i;
+  string symbol = "";
   vector<CSVModel> data{};
-  parseFile(filename, data);
+  for (int i = 1; i < argc; i++) {
+    if (string(argv[i]) == "--symbol" && i + 1 < argc) {
+      symbol = argv[i + 1];
+      break;
+    }
+  }
+
+  if (!symbol.empty()) {
+    string filename = symbol + ".csv";
+    parseFile(filename, data, symbol);
+  } else {
+    vector<string> files = scanDirectory();
+    if (files.empty()) {
+      cout << "No CSV files found in current directory\n";
+      return 1;
+    }
+    int choice = selectCSV(files);
+    string filename = files[choice];
+    parseFile(filename, data, symbol);
+  }
   return 0;
 }
