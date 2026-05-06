@@ -67,13 +67,12 @@ void calculate_stats(const vector<CSVModel> &data, int rowsProcessed,
 
   for (int i = 1; i < (int)data.size(); i++) {
     if (!data[i].open.empty() && !data[i - 1].close.empty()) {
-      double today_price = stod(data[i].open);
+      double today_price = stod(data[i].close);
       double yesterday_price = stod(data[i - 1].close);
       daily_returns.push_back((today_price - yesterday_price) /
                               yesterday_price);
     }
   }
-
   int n = (int)daily_returns.size();
 
   double sum{};
